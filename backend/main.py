@@ -25,7 +25,7 @@ def health_check() -> dict[str, str]:
 
 
 @app.get("/teams/{team_id}/payroll")
-def get_team_payroll(team_id: str, season: str = "sample") -> dict[str, Any]:
+def get_team_payroll(team_id: str, season: str = "2026-27") -> dict[str, Any]:
     team_result = (
         supabase.table("teams")
         .select("id,name,abbreviation")
@@ -56,7 +56,12 @@ def get_team_payroll(team_id: str, season: str = "sample") -> dict[str, Any]:
     contracts_result = (
         supabase.table("contracts")
         .select(
-            "salary,guaranteed_amount,option_type,"
+            "base_salary,"
+            "cap_hit,"
+            "guaranteed_amount,"
+            "option_type,"
+            "contract_type,"
+            "age,"
             "players(id,name,position)"
         )
         .eq("team_id", team_id)
@@ -77,30 +82,36 @@ def get_team_payroll(team_id: str, season: str = "sample") -> dict[str, Any]:
                 "id": player["id"],
                 "name": player["name"],
                 "position": player["position"],
-                "salary": contract["salary"],
+                "age": contract["age"],
+                "contract_type": contract["contract_type"],
+                "base_salary": contract["base_salary"],
+                "cap_hit": contract["cap_hit"],
                 "guaranteed_amount": contract["guaranteed_amount"],
                 "option_type": contract["option_type"],
             }
         )
 
-    players.sort(key=lambda player: player["salary"], reverse=True)
+    players.sort(key=lambda player: player["cap_hit"], reverse=True)
 
-    total_salary = sum(player["salary"] for player in players)
+    total_cap_hit = sum(player["cap_hit"] for player in players)
+    total_base_salary = sum(player["base_salary"] for player in players)
 
     return {
         "team": team,
         "season": season,
         "players": players,
         "totals": {
-            "team_salary": total_salary,
+            #"team_salary": total_cap_hit,
+            "total_cap_hit": total_cap_hit,
+            "total_base_salary": total_base_salary,
             "salary_cap": cap["salary_cap"],
-            "cap_space": cap["salary_cap"] - total_salary,
+            "cap_space": cap["salary_cap"] - total_cap_hit,
             "luxury_tax": cap["luxury_tax"],
-            "tax_room": cap["luxury_tax"] - total_salary,
+            "tax_room": cap["luxury_tax"] - total_cap_hit,
             "first_apron": cap["first_apron"],
-            "first_apron_room": cap["first_apron"] - total_salary,
+            "first_apron_room": cap["first_apron"] - total_cap_hit,
             "second_apron": cap["second_apron"],
-            "second_apron_room": cap["second_apron"] - total_salary,
+            "second_apron_room": cap["second_apron"] - total_cap_hit,
         },
         "is_sample_data": season == "sample",
     }

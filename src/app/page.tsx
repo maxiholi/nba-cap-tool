@@ -3,8 +3,15 @@
 import { useEffect, useState } from "react";
 
 type Player = {
+  id: number;
   name: string;
-  salary: number;
+  position: string | null;
+  age: number | null;
+  contract_type: string | null;
+  base_salary: number;
+  cap_hit: number;
+  guaranteed_amount: number | null;
+  option_type: string | null;
 };
 
 type PayrollResponse = {
@@ -15,7 +22,9 @@ type PayrollResponse = {
   season: string;
   players: Player[];
   totals: {
-    team_salary: number;
+    //team_salary: number;
+    total_cap_hit: number;
+    total_base_salary: number;
     salary_cap: number;
     cap_space: number;
     luxury_tax: number;
@@ -88,9 +97,10 @@ export default function Home() {
   }
 
   const summaryItems = [
-    ["Team salary", data.totals.team_salary],
+    ["Total cap hit", data.totals.total_cap_hit],
+    ["Total base salary", data.totals.total_base_salary],
     ["Salary cap", data.totals.salary_cap],
-    ["Cap space", data.totals.cap_space],
+    ["Basic cap balance", data.totals.cap_space],
     ["Luxury-tax line", data.totals.luxury_tax],
     ["Tax room", data.totals.tax_room],
     ["First-apron room", data.totals.first_apron_room],
@@ -128,22 +138,56 @@ export default function Home() {
         </section>
 
         <section className="mt-10">
-          <h2 className="text-2xl font-semibold">Roster</h2>
+  <h2 className="text-2xl font-semibold">Roster</h2>
 
-          <div className="mt-4 overflow-hidden rounded-xl border border-gray-800">
-            {data.players.map((player) => (
-              <div
-                key={player.name}
-                className="flex justify-between border-b border-gray-800 bg-gray-900 px-5 py-4 last:border-b-0"
-              >
-                <span>{player.name}</span>
-                <span className="font-medium">
-                  {formatCurrency(player.salary)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
+  <div className="mt-4 overflow-x-auto rounded-xl border border-gray-800">
+    <table className="w-full min-w-[850px] bg-gray-900">
+      <thead className="border-b border-gray-700 text-left text-sm text-gray-400">
+        <tr>
+          <th className="px-5 py-4">Player</th>
+          <th className="px-5 py-4">Pos</th>
+          <th className="px-5 py-4">Age</th>
+          <th className="px-5 py-4">Type</th>
+          <th className="px-5 py-4 text-right">Cap hit</th>
+          <th className="px-5 py-4 text-right">Base salary</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {data.players.map((player) => (
+          <tr
+            key={player.id}
+            className="border-b border-gray-800 last:border-b-0"
+          >
+            <td className="px-5 py-4 font-medium">
+              {player.name}
+            </td>
+
+            <td className="px-5 py-4 text-gray-300">
+              {player.position ?? "—"}
+            </td>
+
+            <td className="px-5 py-4 text-gray-300">
+              {player.age ?? "—"}
+            </td>
+
+            <td className="px-5 py-4 text-gray-300">
+              {player.contract_type ?? "—"}
+            </td>
+
+            <td className="px-5 py-4 text-right font-medium">
+              {formatCurrency(player.cap_hit)}
+            </td>
+
+            <td className="px-5 py-4 text-right text-gray-300">
+              {formatCurrency(player.base_salary)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</section>
       </div>
     </main>
   );
