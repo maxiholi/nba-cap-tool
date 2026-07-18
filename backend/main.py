@@ -1,3 +1,6 @@
+from pydantic import BaseModel, Field 
+from services.cap_calculator import calculate_payroll_position
+
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -18,6 +21,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class SigningScenarioRequest(BaseModel):
+    player_name: str = Field(min_length=1, max_length=100)
+    cap_hit: int = Field(gt=0)
+    season: str = "2026-27"
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
@@ -114,4 +121,78 @@ def get_team_payroll(team_id: str, season: str = "2026-27") -> dict[str, Any]:
             "second_apron_room": cap["second_apron"] - total_cap_hit,
         },
         "is_sample_data": season == "sample",
+    }
+
+@app.post("/teams/{team_id}/scenarios/signing")
+def simulate_signing(
+    team_id: str,
+    scenario: SigningScenarioRequest,
+) -> dict[str, Any]:
+    team_result = (
+        supabase.table("teams")
+        .select("id,name,abbreviation")
+        .eq("id", team_id)
+        .limit(1)
+        .execute()
+    )
+
+    if not team_result.data:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    cap_result = (
+        supabase.table("cap_settings")
+        .select(
+            "season,salary_cap,luxury_tax,first_apron,second_apron"
+        )
+        .eq("season", scenario.season)
+        .limit(1)
+        .execute()
+    )
+
+    if not cap_result.data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Cap settings not found for {scenario.season}",
+        )
+
+    contracts_result = (
+        supabase.table("contracts")
+        .select("cap_hit")
+        .eq("team_id", team_id)
+        .eq("season", scenario.season)
+        .execute()
+    )
+
+    current_cap_hit = sum(
+        contract["cap_hit"]
+        for contract in contracts_result.data
+        if contract["cap_hit"] is not None
+    )
+
+    cap = cap_result.data[0]
+
+    calculation = calculate_payroll_position(
+        current_cap_hit=current_cap_hit,
+        added_cap_hit=scenario.cap_hit,
+        salary_cap=cap["salary_cap"],
+        luxury_tax=cap["luxury_tax"],
+        first_apron=cap["first_apron"],
+        second_apron=cap["second_apron"],
+    )
+
+    return {
+        "team": team_result.data[0],
+        "season": scenario.season,
+        "proposed_player": {
+            "name": scenario.player_name,
+            "cap_hit": scenario.cap_hit,
+        },
+        "calculation": calculation,
+        "legal_analysis": {
+            "status": "not_yet_implemented",
+            "message": (
+                "This simulation shows payroll impact only. "
+                "CBA eligibility rules have not yet been applied."
+            ),
+        },
     }

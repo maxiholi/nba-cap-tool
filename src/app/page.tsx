@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent,useEffect, useState } from "react";
 
 type Player = {
   id: number;
@@ -37,6 +37,38 @@ type PayrollResponse = {
   is_sample_data: boolean;
 };
 
+type SigningCalculation = {
+  current_cap_hit: number;
+  added_cap_hit: number;
+  projected_cap_hit: number;
+  salary_cap_balance: number;
+  tax_room: number;
+  first_apron_room: number;
+  second_apron_room: number;
+  over_salary_cap: boolean;
+  over_luxury_tax: boolean;
+  over_first_apron: boolean;
+  over_second_apron: boolean;
+};
+
+type SigningScenarioResponse = {
+  team: {
+    id: string;
+    name: string;
+    abbreviation: string;
+  };
+  season: string;
+  proposed_player: {
+    name: string;
+    cap_hit: number;
+  };
+  calculation: SigningCalculation;
+  legal_analysis: {
+    status: string;
+    message: string;
+  };
+};
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -48,6 +80,12 @@ function formatCurrency(value: number): string {
 export default function Home() {
   const [data, setData] = useState<PayrollResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [playerName, setPlayerName] = useState("");
+  const [salaryInput, setSalaryInput] = useState("");
+  const [scenarioResult, setScenarioResult] =
+  useState<SigningScenarioResponse | null>(null);
+  const [scenarioError, setScenarioError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const apiUrl =
@@ -75,6 +113,62 @@ export default function Home() {
 
     loadPayroll();
   }, []);
+
+  async function handleScenarioSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+  
+    setScenarioError(null);
+    setScenarioResult(null);
+  
+    const capHit = Number(salaryInput.replace(/[$,\s]/g, ""));
+  
+    if (!playerName.trim()) {
+      setScenarioError("Enter a player name.");
+      return;
+    }
+  
+    if (!Number.isFinite(capHit) || capHit <= 0) {
+      setScenarioError("Enter a valid positive salary.");
+      return;
+    }
+  
+    setIsSubmitting(true);
+  
+    try {
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+  
+      const response = await fetch(
+        `${apiUrl}/teams/nyk/scenarios/signing`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            player_name: playerName.trim(),
+            cap_hit: capHit,
+            season: data?.season ?? "2026-27",
+          }),
+        },
+      );
+  
+      if (!response.ok) {
+        throw new Error(`API returned status ${response.status}`);
+      }
+  
+      const result: SigningScenarioResponse = await response.json();
+      setScenarioResult(result);
+    } catch (requestError) {
+      setScenarioError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to run the scenario.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   if (error) {
     return (
@@ -187,6 +281,94 @@ export default function Home() {
       </tbody>
     </table>
   </div>
+</section>
+<section className="mt-12">
+  <h2 className="text-2xl font-semibold">Signing Scenario</h2>
+
+  <p className="mt-2 text-gray-400">
+    Add a proposed player cap hit to see the payroll impact.
+  </p>
+
+  <form
+    onSubmit={handleScenarioSubmit}
+    className="mt-5 rounded-xl border border-gray-800 bg-gray-900 p-6"
+  >
+    <div className="grid gap-5 md:grid-cols-2">
+      <label className="block">
+        <span className="text-sm text-gray-400">Player name</span>
+        <input
+          value={playerName}
+          onChange={(event) => setPlayerName(event.target.value)}
+          placeholder="Example: Test Free Agent"
+          className="mt-2 w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 outline-none focus:border-blue-500"
+        />
+      </label>
+
+      <label className="block">
+        <span className="text-sm text-gray-400">Proposed cap hit</span>
+        <input
+          value={salaryInput}
+          onChange={(event) => setSalaryInput(event.target.value)}
+          placeholder="Example: 10000000"
+          inputMode="numeric"
+          className="mt-2 w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 outline-none focus:border-blue-500"
+        />
+      </label>
+    </div>
+
+    <button
+      type="submit"
+      disabled={isSubmitting}
+      className="mt-5 rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-50"
+    >
+      {isSubmitting ? "Calculating…" : "Simulate signing"}
+    </button>
+
+    {scenarioError && (
+      <p className="mt-4 text-red-400">{scenarioError}</p>
+    )}
+  </form>
+
+  {scenarioResult && (
+    <div className="mt-6 rounded-xl border border-gray-800 bg-gray-900 p-6">
+      <h3 className="text-xl font-semibold">
+        Add {scenarioResult.proposed_player.name}
+      </h3>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <p className="text-sm text-gray-400">Added cap hit</p>
+          <p className="mt-1 text-xl font-semibold">
+            {formatCurrency(
+              scenarioResult.calculation.added_cap_hit,
+            )}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-400">Projected cap hit</p>
+          <p className="mt-1 text-xl font-semibold">
+            {formatCurrency(
+              scenarioResult.calculation.projected_cap_hit,
+            )}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-400">Second-apron room</p>
+          <p className="mt-1 text-xl font-semibold">
+            {formatCurrency(
+              scenarioResult.calculation.second_apron_room,
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-yellow-800 bg-yellow-950 p-4 text-yellow-200">
+        {scenarioResult.legal_analysis.message}
+      </div>
+    </div>
+  )}
 </section>
       </div>
     </main>
