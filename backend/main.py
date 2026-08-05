@@ -1,19 +1,15 @@
-from pydantic import BaseModel, Field 
-from services.cap_calculator import (
-    calculate_payroll_position,
-    evaluate_cap_room_signing,
-)
-
-from services.minimum_salary_service import evaluate_minimum_signing
-
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from database import supabase
-
-from enum import Enum
+from services.signing_scenario_service import (
+    SigningMechanism,
+    SigningScenarioError,
+    run_signing_scenario,
+)
 
 app = FastAPI(title="NBA Cap Engine")
 
@@ -27,14 +23,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-class SigningMechanism(str, Enum):
-    AUTO = "auto"
-    CAP_ROOM = "cap_room"
-    VETERAN_MINIMUM = "veteran_minimum"
-    MID_LEVEL_EXCEPTION = "mid_level_exception"
-    BI_ANNUAL_EXCEPTION = "bi_annual_exception"
-    BIRD_RIGHTS = "bird_rights"
 
 class SigningScenarioRequest(BaseModel):
     player_name: str = Field(min_length=1, max_length=100)
@@ -190,22 +178,8 @@ def simulate_signing(
 
     cap = cap_result.data[0]
 
-    minimum_rule = None
-    base_salary = None
-
+    minimum_scale_rows = []
     if scenario.mechanism == SigningMechanism.VETERAN_MINIMUM:
-        if scenario.years_of_service is None:
-            raise HTTPException(
-                status_code=422,
-                detail="years_of_service is required for veteran minimum",
-            )
-
-        if scenario.contract_years is None:
-            raise HTTPException(
-                status_code=422,
-                detail="contract_years is required for veteran minimum",
-            )
-
         scale_result = (
             supabase.table("minimum_salary_scale")
             .select(
@@ -218,89 +192,23 @@ def simulate_signing(
             .eq("season", scenario.season)
             .execute()
         )
+        minimum_scale_rows = scale_result.data
 
-        minimum_rule = evaluate_minimum_signing(
+    try:
+        return run_signing_scenario(
+            team=team_result.data[0],
+            cap=cap,
+            current_cap_hit=current_cap_hit,
+            player_name=scenario.player_name,
             season=scenario.season,
+            mechanism=scenario.mechanism,
+            cap_hit=scenario.cap_hit,
             years_of_service=scenario.years_of_service,
             contract_years=scenario.contract_years,
-            scale_rows=scale_result.data,
+            minimum_scale_rows=minimum_scale_rows,
         )
-
-        if not minimum_rule["allowed"]:
-            return {
-                "team": team_result.data[0],
-                "season": scenario.season,
-                "proposed_player": {
-                    "name": scenario.player_name,
-                    "mechanism": scenario.mechanism.value,
-                },
-                "calculation": None,
-                "legal_analysis": {
-                    "overall_status": "not_allowed",
-                    "rules": [minimum_rule],
-                },
-            }
-
-        added_cap_hit = minimum_rule["cap_hit"]
-        base_salary = minimum_rule["base_salary"]
-
-        if added_cap_hit is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Minimum signing produced no cap hit",
-            )
-
-    elif scenario.mechanism in (
-        SigningMechanism.AUTO,
-        SigningMechanism.CAP_ROOM,
-    ):
-        if scenario.cap_hit is None:
-            raise HTTPException(
-                status_code=422,
-                detail="cap_hit is required for this signing mechanism",
-            )
-
-        added_cap_hit = scenario.cap_hit
-
-    else:
+    except SigningScenarioError as error:
         raise HTTPException(
-            status_code=501,
-            detail=f"{scenario.mechanism.value} is not implemented yet",
-        )
-
-    calculation = calculate_payroll_position(
-        current_cap_hit=current_cap_hit,
-        added_cap_hit=added_cap_hit,
-        salary_cap=cap["salary_cap"],
-        luxury_tax=cap["luxury_tax"],
-        first_apron=cap["first_apron"],
-        second_apron=cap["second_apron"],
-    )
-
-    cap_room_rule = evaluate_cap_room_signing(
-    current_cap_hit=current_cap_hit,
-    proposed_cap_hit=added_cap_hit,
-    salary_cap=cap["salary_cap"],
-    )
-
-    return {
-        "team": team_result.data[0],
-        "season": scenario.season,
-        "proposed_player": {
-            "name": scenario.player_name,
-            "cap_hit": added_cap_hit,
-        },
-        "calculation": calculation,
-        "legal_analysis": {
-    "overall_status": (
-        minimum_rule["status"]
-        if minimum_rule
-        else "payroll_impact_only"
-    ),
-    "rules": [minimum_rule] if minimum_rule else [],
-    "disclaimer": (
-        "Only the selected signing mechanism has been evaluated. "
-        "Other CBA restrictions may still apply."
-            ),
-        },
-    }
+            status_code=error.status_code,
+            detail=error.detail,
+        ) from error
