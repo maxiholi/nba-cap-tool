@@ -70,11 +70,23 @@ type SigningScenarioResponse = {
   proposed_player: {
     name: string;
     cap_hit: number;
+    base_salary?: number | null;
+    mechanism?: string;
+    years_of_service?: number | null;
+    contract_years?: number | null;
   };
   calculation: SigningCalculation;
   legal_analysis: {
     overall_status: string;
-    rules: RuleResult[];
+    rules: {
+      rule_id: string;
+      rule_name: string;
+      status: string;
+      allowed: boolean;
+      explanation: string;
+      base_salary?: number | null;
+      cap_hit?: number | null;
+    }[];
     disclaimer: string;
   };
 };
@@ -115,6 +127,10 @@ export default function Home() {
   useState<SigningScenarioResponse | null>(null);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [signingMechanism, setSigningMechanism] =
+  useState<"auto" | "cap_room" | "veteran_minimum">("auto");
+  const [yearsOfService, setYearsOfService] = useState("");
+  const [contractYears, setContractYears] = useState("1");
 
   useEffect(() => {
     const apiUrl =
@@ -156,8 +172,22 @@ export default function Home() {
       return;
     }
   
-    if (!Number.isFinite(capHit) || capHit <= 0) {
+    if (
+      signingMechanism !== "veteran_minimum" &&
+      (!Number.isFinite(capHit) || capHit <= 0)
+    ) {
       setScenarioError("Enter a valid positive salary.");
+      return;
+    }
+
+    if (
+      signingMechanism === "veteran_minimum" &&
+      (
+        !Number.isInteger(Number(yearsOfService)) ||
+        Number(yearsOfService) < 0
+      )
+    ) {
+      setScenarioError("Enter valid NBA years of service.");
       return;
     }
   
@@ -174,11 +204,25 @@ export default function Home() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            player_name: playerName.trim(),
-            cap_hit: capHit,
-            season: data?.season ?? "2026-27",
-          }),
+          body: JSON.stringify(
+            signingMechanism === "veteran_minimum"
+              ? {
+                  player_name: playerName.trim(),
+                  season: data?.season ?? "2026-27",
+                  mechanism: "veteran_minimum",
+                  cap_hit: null,
+                  years_of_service: Number(yearsOfService),
+                  contract_years: Number(contractYears),
+                }
+              : {
+                  player_name: playerName.trim(),
+                  season: data?.season ?? "2026-27",
+                  mechanism: signingMechanism,
+                  cap_hit: capHit,
+                  years_of_service: null,
+                  contract_years: null,
+                },
+          ),
         },
       );
   
@@ -322,28 +366,96 @@ export default function Home() {
     onSubmit={handleScenarioSubmit}
     className="mt-5 rounded-xl border border-gray-800 bg-gray-900 p-6"
   >
-    <div className="grid gap-5 md:grid-cols-2">
+<div className="grid gap-5 md:grid-cols-2">
+  <label className="block">
+    <span className="text-sm text-gray-400">Player name</span>
+
+    <input
+      value={playerName}
+      onChange={(event) => setPlayerName(event.target.value)}
+      placeholder="Example: Veteran Minimum Player"
+      className="mt-2 w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 outline-none focus:border-blue-500"
+    />
+  </label>
+
+  <label className="block">
+    <span className="text-sm text-gray-400">
+      Signing mechanism
+    </span>
+
+    <select
+      value={signingMechanism}
+      onChange={(event) =>
+        setSigningMechanism(
+          event.target.value as
+            | "auto"
+            | "cap_room"
+            | "veteran_minimum",
+        )
+      }
+      className="mt-2 w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 outline-none focus:border-blue-500"
+    >
+      <option value="auto">Determine automatically</option>
+      <option value="cap_room">Cap room</option>
+      <option value="veteran_minimum">
+        Veteran minimum
+      </option>
+    </select>
+  </label>
+
+  {signingMechanism !== "veteran_minimum" && (
+    <label className="block">
+      <span className="text-sm text-gray-400">
+        Proposed cap hit
+      </span>
+
+      <input
+        value={salaryInput}
+        onChange={(event) => setSalaryInput(event.target.value)}
+        placeholder="Example: 10000000"
+        inputMode="numeric"
+        className="mt-2 w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 outline-none focus:border-blue-500"
+      />
+    </label>
+  )}
+
+  {signingMechanism === "veteran_minimum" && (
+    <>
       <label className="block">
-        <span className="text-sm text-gray-400">Player name</span>
+        <span className="text-sm text-gray-400">
+          NBA years of service
+        </span>
+
         <input
-          value={playerName}
-          onChange={(event) => setPlayerName(event.target.value)}
-          placeholder="Example: Test Free Agent"
+          value={yearsOfService}
+          onChange={(event) =>
+            setYearsOfService(event.target.value)
+          }
+          placeholder="Example: 12"
+          inputMode="numeric"
           className="mt-2 w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 outline-none focus:border-blue-500"
         />
       </label>
 
       <label className="block">
-        <span className="text-sm text-gray-400">Proposed cap hit</span>
-        <input
-          value={salaryInput}
-          onChange={(event) => setSalaryInput(event.target.value)}
-          placeholder="Example: 10000000"
-          inputMode="numeric"
+        <span className="text-sm text-gray-400">
+          Contract length
+        </span>
+
+        <select
+          value={contractYears}
+          onChange={(event) =>
+            setContractYears(event.target.value)
+          }
           className="mt-2 w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-3 outline-none focus:border-blue-500"
-        />
+        >
+          <option value="1">1 year</option>
+          <option value="2">2 years</option>
+        </select>
       </label>
-    </div>
+    </>
+  )}
+</div>
 
     <button
       type="submit"
@@ -472,23 +584,22 @@ export default function Home() {
       </div>
     </div>
 
-    <div className="mt-6">
+    <div className="mt-6 space-y-4">
   {scenarioResult.legal_analysis.rules.map((rule) => (
     <div
       key={rule.rule_id}
       className={`rounded-lg border p-4 ${
         rule.allowed
           ? "border-green-800 bg-green-950 text-green-200"
-          : "border-yellow-800 bg-yellow-950 text-yellow-200"
+          : "border-red-800 bg-red-950 text-red-200"
       }`}
     >
       <p className="font-semibold">{rule.rule_name}</p>
-
       <p className="mt-2">{rule.explanation}</p>
     </div>
   ))}
 
-  <p className="mt-4 text-sm text-gray-400">
+  <p className="text-sm text-gray-400">
     {scenarioResult.legal_analysis.disclaimer}
   </p>
 </div>
