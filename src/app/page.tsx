@@ -77,6 +77,25 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+function formatThresholdStatus(
+  room: number,
+  thresholdName: string,
+): string {
+  if (room >= 0) {
+    return `${formatCurrency(room)} below ${thresholdName}`;
+  }
+
+  return `${formatCurrency(Math.abs(room))} above ${thresholdName}`;
+}
+
+function getThresholdStatusClasses(room: number): string {
+  if (room >= 0) {
+    return "border-green-900 bg-green-950/40 text-green-200";
+  }
+
+  return "border-red-900 bg-red-950/40 text-red-200";
+}
+
 export default function Home() {
   const [data, setData] = useState<PayrollResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -330,45 +349,128 @@ export default function Home() {
   </form>
 
   {scenarioResult && (
-    <div className="mt-6 rounded-xl border border-gray-800 bg-gray-900 p-6">
-      <h3 className="text-xl font-semibold">
-        Add {scenarioResult.proposed_player.name}
-      </h3>
+  <div className="mt-6 rounded-xl border border-gray-800 bg-gray-900 p-6">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-wider text-blue-400">
+          Signing simulation
+        </p>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div>
-          <p className="text-sm text-gray-400">Added cap hit</p>
-          <p className="mt-1 text-xl font-semibold">
-            {formatCurrency(
-              scenarioResult.calculation.added_cap_hit,
-            )}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-sm text-gray-400">Projected cap hit</p>
-          <p className="mt-1 text-xl font-semibold">
-            {formatCurrency(
-              scenarioResult.calculation.projected_cap_hit,
-            )}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-sm text-gray-400">Second-apron room</p>
-          <p className="mt-1 text-xl font-semibold">
-            {formatCurrency(
-              scenarioResult.calculation.second_apron_room,
-            )}
-          </p>
-        </div>
+        <h3 className="mt-1 text-2xl font-semibold">
+          Add {scenarioResult.proposed_player.name}
+        </h3>
       </div>
 
-      <div className="mt-6 rounded-lg border border-yellow-800 bg-yellow-950 p-4 text-yellow-200">
-        {scenarioResult.legal_analysis.message}
+      <div className="rounded-lg border border-gray-700 bg-gray-950 px-4 py-3">
+        <p className="text-xs uppercase tracking-wide text-gray-400">
+          Added cap hit
+        </p>
+
+        <p className="mt-1 text-xl font-semibold">
+          {formatCurrency(
+            scenarioResult.calculation.added_cap_hit,
+          )}
+        </p>
       </div>
     </div>
-  )}
+
+    <div className="mt-6 grid gap-4 sm:grid-cols-2">
+      <div className="rounded-lg border border-gray-700 bg-gray-950 p-4">
+        <p className="text-sm text-gray-400">Current cap hit</p>
+
+        <p className="mt-2 text-2xl font-semibold">
+          {formatCurrency(
+            scenarioResult.calculation.current_cap_hit,
+          )}
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-blue-900 bg-blue-950/40 p-4">
+        <p className="text-sm text-blue-300">Projected cap hit</p>
+
+        <p className="mt-2 text-2xl font-semibold text-blue-100">
+          {formatCurrency(
+            scenarioResult.calculation.projected_cap_hit,
+          )}
+        </p>
+      </div>
+    </div>
+
+    <div className="mt-6">
+      <h4 className="text-lg font-semibold">Threshold position</h4>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div
+          className={`rounded-lg border p-4 ${getThresholdStatusClasses(
+            scenarioResult.calculation.salary_cap_balance,
+          )}`}
+        >
+          <p className="text-sm font-medium">Salary cap</p>
+
+          <p className="mt-2 text-lg font-semibold">
+            {formatThresholdStatus(
+              scenarioResult.calculation.salary_cap_balance,
+              "the salary cap",
+            )}
+          </p>
+        </div>
+
+        <div
+          className={`rounded-lg border p-4 ${getThresholdStatusClasses(
+            scenarioResult.calculation.tax_room,
+          )}`}
+        >
+          <p className="text-sm font-medium">Luxury-tax line</p>
+
+          <p className="mt-2 text-lg font-semibold">
+            {formatThresholdStatus(
+              scenarioResult.calculation.tax_room,
+              "the luxury-tax line",
+            )}
+          </p>
+        </div>
+
+        <div
+          className={`rounded-lg border p-4 ${getThresholdStatusClasses(
+            scenarioResult.calculation.first_apron_room,
+          )}`}
+        >
+          <p className="text-sm font-medium">First apron</p>
+
+          <p className="mt-2 text-lg font-semibold">
+            {formatThresholdStatus(
+              scenarioResult.calculation.first_apron_room,
+              "the first apron",
+            )}
+          </p>
+        </div>
+
+        <div
+          className={`rounded-lg border p-4 ${getThresholdStatusClasses(
+            scenarioResult.calculation.second_apron_room,
+          )}`}
+        >
+          <p className="text-sm font-medium">Second apron</p>
+
+          <p className="mt-2 text-lg font-semibold">
+            {formatThresholdStatus(
+              scenarioResult.calculation.second_apron_room,
+              "the second apron",
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="mt-6 rounded-lg border border-yellow-800 bg-yellow-950 p-4 text-yellow-200">
+      <p className="font-semibold">CBA analysis not yet applied</p>
+
+      <p className="mt-2">
+        {scenarioResult.legal_analysis.message}
+      </p>
+    </div>
+  </div>
+)}
 </section>
       </div>
     </main>
