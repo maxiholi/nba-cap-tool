@@ -199,7 +199,7 @@ def simulate_signing(
         "calculation": calculation,
         "legal_analysis": {
             "overall_status": cap_room_rule["status"],
-            "rules": cap_room_rule["rules"],
+            "rules": [cap_room_rule],
     "disclaimer": (
         "This result currently evaluates ordinary salary-cap room only. "
         "Exceptions, Bird rights, minimum contracts, and other CBA "

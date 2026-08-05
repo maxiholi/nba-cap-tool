@@ -51,6 +51,15 @@ type SigningCalculation = {
   over_second_apron: boolean;
 };
 
+type RuleResult = {
+  rule_id: string;
+  rule_name: string;
+  status: "allowed" | "not_allowed" | "requires_exception";
+  allowed: boolean;
+  explanation: string;
+  values: Record<string, number | boolean>;
+};
+
 type SigningScenarioResponse = {
   team: {
     id: string;
@@ -64,8 +73,9 @@ type SigningScenarioResponse = {
   };
   calculation: SigningCalculation;
   legal_analysis: {
-    status: string;
-    message: string;
+    overall_status: string;
+    rules: RuleResult[];
+    disclaimer: string;
   };
 };
 
@@ -462,13 +472,26 @@ export default function Home() {
       </div>
     </div>
 
-    <div className="mt-6 rounded-lg border border-yellow-800 bg-yellow-950 p-4 text-yellow-200">
-      <p className="font-semibold">CBA analysis not yet applied</p>
+    <div className="mt-6">
+  {scenarioResult.legal_analysis.rules.map((rule) => (
+    <div
+      key={rule.rule_id}
+      className={`rounded-lg border p-4 ${
+        rule.allowed
+          ? "border-green-800 bg-green-950 text-green-200"
+          : "border-yellow-800 bg-yellow-950 text-yellow-200"
+      }`}
+    >
+      <p className="font-semibold">{rule.rule_name}</p>
 
-      <p className="mt-2">
-        {scenarioResult.legal_analysis.message}
-      </p>
+      <p className="mt-2">{rule.explanation}</p>
     </div>
+  ))}
+
+  <p className="mt-4 text-sm text-gray-400">
+    {scenarioResult.legal_analysis.disclaimer}
+  </p>
+</div>
   </div>
 )}
 </section>
