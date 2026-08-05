@@ -1,5 +1,8 @@
 from pydantic import BaseModel, Field 
-from services.cap_calculator import calculate_payroll_position
+from services.cap_calculator import (
+    calculate_payroll_position,
+    evaluate_cap_room_signing,
+)
 
 from typing import Any
 
@@ -180,6 +183,12 @@ def simulate_signing(
         second_apron=cap["second_apron"],
     )
 
+    cap_room_rule = evaluate_cap_room_signing(
+    current_cap_hit=current_cap_hit,
+    proposed_cap_hit=scenario.cap_hit,
+    salary_cap=cap["salary_cap"],
+    )
+
     return {
         "team": team_result.data[0],
         "season": scenario.season,
@@ -189,10 +198,12 @@ def simulate_signing(
         },
         "calculation": calculation,
         "legal_analysis": {
-            "status": "not_yet_implemented",
-            "message": (
-                "This simulation shows payroll impact only. "
-                "CBA eligibility rules have not yet been applied."
+            "overall_status": cap_room_rule["status"],
+            "rules": cap_room_rule["rules"],
+    "disclaimer": (
+        "This result currently evaluates ordinary salary-cap room only. "
+        "Exceptions, Bird rights, minimum contracts, and other CBA "
+        "mechanisms have not yet been evaluated."
             ),
         },
     }
